@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 type RequestStatus = "Aktif" | "Selesai" | "Draft";
 
@@ -55,7 +57,34 @@ const requests: RequestItem[] = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      const supabase = createClient();
+
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error("Supabase logout error:", error);
+        setLoggingOut(false);
+        return;
+      }
+
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout error:", error);
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#f7f7f4] text-[#171717]">
@@ -102,6 +131,33 @@ export default function Home() {
 
             <MobileNavItem label="Settings" comingSoon />
           </nav>
+
+          <div className="mt-4 border-t border-black/[0.06] pt-4">
+            <div className="flex items-center gap-3 rounded-2xl px-3 py-2">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#171717] text-xs font-semibold text-white">
+                DH
+              </div>
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">
+                  Deary
+                </p>
+
+                <p className="truncate text-xs text-black/40">
+                  Noctara
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="ml-auto rounded-lg px-3 py-2 text-xs font-semibold text-black/40 transition hover:bg-black/[0.04] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {loggingOut ? "Keluar..." : "Keluar"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -172,11 +228,13 @@ export default function Home() {
 
             <button
               type="button"
-              className="ml-auto text-black/20"
-              aria-label="Account menu belum tersedia"
-              title="Segera"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="ml-auto rounded-lg px-2 py-1.5 text-xs font-semibold text-black/35 transition hover:bg-black/[0.04] hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Keluar dari Laroa"
+              title="Keluar"
             >
-              <DotsIcon />
+              {loggingOut ? "..." : "Keluar"}
             </button>
           </div>
         </div>
@@ -952,16 +1010,6 @@ function PlusIcon() {
         strokeWidth="2"
         strokeLinecap="round"
       />
-    </svg>
-  );
-}
-
-function DotsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="5" cy="12" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <circle cx="19" cy="12" r="1.5" />
     </svg>
   );
 }

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 type FieldType = "text" | "file" | "checkbox";
 
@@ -99,26 +100,26 @@ const templateData: Record<
 };
 
 export default function RequestBuilderPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const templateKey = searchParams.get("template") ?? "blank";
-
   const initialTemplate =
     templateData[templateKey] ?? templateData.blank;
 
   const [title, setTitle] = useState(initialTemplate.title);
-
   const [description, setDescription] = useState(
     initialTemplate.description,
   );
-
   const [requirements, setRequirements] = useState<Requirement[]>(
     initialTemplate.requirements,
   );
 
   const [editingId, setEditingId] = useState<number | null>(null);
-
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
 
   const requiredCount = useMemo(
     () => requirements.filter((item) => item.required).length,
@@ -168,10 +169,118 @@ export default function RequestBuilderPage() {
     setAddMenuOpen(false);
   }
 
+  async function publishRequest() {
+    if (publishing) return;
+
+    setPublishError("");
+
+    const cleanTitle = title.trim();
+    const cleanDescription = description.trim();
+
+    if (!cleanTitle) {
+      setPublishError("Judul request belum diisi.");
+      return;
+    }
+
+    if (requirements.some((item) => !item.label.trim())) {
+      setPublishError(
+        "Pastikan semua kebutuhan memiliki nama.",
+      );
+      return;
+    }
+
+    setPublishing(true);
+
+    const supabase = createClient();
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        router.replace("/login");
+        router.refresh();
+        return;
+      }
+
+      const requestCode = createRequestCode();
+      const publicToken = createPublicToken();
+
+      const { data: request, error: requestError } =
+        await supabase
+          .from("requests")
+          .insert({
+            owner_id: user.id,
+            request_code: requestCode,
+            title: cleanTitle,
+            type: templateKey,
+            status: "active",
+            description: cleanDescription || null,
+            public_token: publicToken,
+          })
+          .select("id, request_code, public_token")
+          .single();
+
+      if (requestError) {
+        throw requestError;
+      }
+
+      if (requirements.length > 0) {
+        const requirementRows = requirements.map(
+          (item, index) => ({
+            request_id: request.id,
+            label: item.label.trim(),
+            field_type: item.type,
+            required: item.required,
+            position: index,
+          }),
+        );
+
+        const { error: requirementsError } =
+          await supabase
+            .from("request_requirements")
+            .insert(requirementRows);
+
+        if (requirementsError) {
+          const { error: cleanupError } = await supabase
+            .from("requests")
+            .delete()
+            .eq("id", request.id);
+
+          if (cleanupError) {
+            console.error(
+              "Failed to clean up request:",
+              cleanupError,
+            );
+          }
+
+          throw requirementsError;
+        }
+      }
+
+      router.push(
+        `/requests/new/publish?request=${encodeURIComponent(
+          request.id,
+        )}&token=${encodeURIComponent(
+          request.public_token,
+        )}&code=${encodeURIComponent(request.request_code)}`,
+      );
+    } catch (error) {
+      console.error("Publish request error:", error);
+
+      setPublishError(
+        "Request belum berhasil dibuat. Silakan coba lagi.",
+      );
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f7f4] text-[#171717]">
       {/* TOP BAR */}
-
       <header className="sticky top-0 z-40 border-b border-black/[0.06] bg-white/90 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-5 sm:px-7 lg:h-20 lg:px-9">
           <div className="flex items-center gap-4">
@@ -197,36 +306,41 @@ export default function RequestBuilderPage() {
               </div>
 
               <p className="mt-0.5 hidden text-[10px] text-black/35 sm:block">
-                Perubahan tersimpan otomatis
+                Belum dipublikasikan
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="hidden h-10 items-center rounded-xl px-4 text-sm font-semibold text-black/45 transition hover:bg-black/[0.03] hover:text-black sm:flex">
+            <button
+              type="button"
+              disabled
+              className="hidden h-10 items-center rounded-xl px-4 text-sm font-semibold text-black/25 sm:flex"
+              title="Penyimpanan draft akan tersedia nanti"
+            >
               Simpan
             </button>
 
-            <Link
-              href="/requests/new/publish"
-              className="flex h-10 items-center gap-2 rounded-xl bg-[#171717] px-4 text-sm font-semibold text-white transition hover:bg-black/80"
+            <button
+              type="button"
+              onClick={publishRequest}
+              disabled={publishing}
+              className="flex h-10 items-center gap-2 rounded-xl bg-[#171717] px-4 text-sm font-semibold text-white transition hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Publish
-              <ArrowIcon />
-            </Link>
+              {publishing ? "Publishing..." : "Publish"}
+
+              {!publishing && <ArrowIcon />}
+            </button>
           </div>
         </div>
       </header>
 
       {/* BODY */}
-
       <div className="grid min-h-[calc(100vh-64px)] lg:min-h-[calc(100vh-80px)] lg:grid-cols-[minmax(0,1fr)_430px]">
         {/* BUILDER */}
-
         <section className="px-5 py-8 sm:px-8 lg:px-10 lg:py-10 xl:px-14">
           <div className="mx-auto max-w-[760px]">
             {/* STEPS */}
-
             <div className="mb-10 flex items-center gap-3">
               <Step number="1" label="Template" done />
 
@@ -240,7 +354,6 @@ export default function RequestBuilderPage() {
             </div>
 
             {/* HEADING */}
-
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-black/30">
                 Request Builder
@@ -251,13 +364,12 @@ export default function RequestBuilderPage() {
               </h1>
 
               <p className="mt-3 max-w-lg text-sm leading-6 text-black/45">
-                Tentukan apa saja yang perlu diisi,
-                diunggah, atau disetujui oleh penerima.
+                Tentukan apa saja yang perlu diisi, diunggah, atau
+                disetujui oleh penerima.
               </p>
             </div>
 
             {/* BASIC INFO */}
-
             <div className="mt-10 rounded-[22px] border border-black/[0.06] bg-white p-5 sm:p-6">
               <div className="mb-6">
                 <p className="text-sm font-semibold">
@@ -302,7 +414,6 @@ export default function RequestBuilderPage() {
             </div>
 
             {/* REQUIREMENTS */}
-
             <div className="mt-7">
               <div className="flex items-end justify-between">
                 <div>
@@ -316,8 +427,6 @@ export default function RequestBuilderPage() {
                   </p>
                 </div>
               </div>
-
-              {/* LIST */}
 
               <div className="mt-4 space-y-2.5">
                 {requirements.length === 0 && (
@@ -347,10 +456,9 @@ export default function RequestBuilderPage() {
                 ))}
               </div>
 
-              {/* ADD */}
-
               <div className="relative mt-4">
                 <button
+                  type="button"
                   onClick={() =>
                     setAddMenuOpen((current) => !current)
                   }
@@ -393,8 +501,14 @@ export default function RequestBuilderPage() {
               </div>
             </div>
 
-            {/* FOOTER ACTION */}
+            {/* ERROR */}
+            {publishError && (
+              <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {publishError}
+              </div>
+            )}
 
+            {/* FOOTER ACTION */}
             <div className="mt-12 flex items-center justify-between border-t border-black/[0.07] pt-6">
               <Link
                 href="/requests/new"
@@ -403,19 +517,23 @@ export default function RequestBuilderPage() {
                 Kembali
               </Link>
 
-              <Link
-                href="/requests/new/publish"
-                className="flex h-11 items-center gap-3 rounded-xl bg-[#171717] px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg"
+              <button
+                type="button"
+                onClick={publishRequest}
+                disabled={publishing}
+                className="flex h-11 items-center gap-3 rounded-xl bg-[#171717] px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
-                Lanjutkan
-                <ArrowIcon />
-              </Link>
+                {publishing
+                  ? "Publishing..."
+                  : "Lanjutkan"}
+
+                {!publishing && <ArrowIcon />}
+              </button>
             </div>
           </div>
         </section>
 
         {/* PREVIEW */}
-
         <aside className="hidden border-l border-black/[0.06] bg-[#eeeeea] lg:block">
           <div className="sticky top-20 flex h-[calc(100vh-80px)] flex-col">
             <div className="flex items-center justify-between px-7 py-5">
@@ -472,6 +590,7 @@ function RequirementCard({
       }`}
     >
       <button
+        type="button"
         onClick={onEdit}
         className="flex w-full items-center gap-3 px-4 py-4 text-left sm:px-5"
       >
@@ -481,9 +600,7 @@ function RequirementCard({
 
         <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#f3f3ef] text-black/45">
           {item.type === "text" && <TextIcon />}
-
           {item.type === "file" && <UploadIcon />}
-
           {item.type === "checkbox" && (
             <CheckSquareIcon />
           )}
@@ -552,11 +669,9 @@ function RequirementCard({
                 <option value="text">
                   Data / Teks
                 </option>
-
                 <option value="file">
                   Upload Dokumen
                 </option>
-
                 <option value="checkbox">
                   Persetujuan
                 </option>
@@ -569,6 +684,7 @@ function RequirementCard({
               </label>
 
               <button
+                type="button"
                 onClick={() =>
                   onChange({
                     required: !item.required,
@@ -587,6 +703,7 @@ function RequirementCard({
 
           <div className="mt-5 flex justify-end">
             <button
+              type="button"
               onClick={onDelete}
               className="text-xs font-semibold text-red-500/70 transition hover:text-red-600"
             >
@@ -676,11 +793,9 @@ function RecipientPreview({
                 {item.type === "text" && (
                   <TextIcon />
                 )}
-
                 {item.type === "file" && (
                   <UploadIcon />
                 )}
-
                 {item.type === "checkbox" && (
                   <CheckSquareIcon />
                 )}
@@ -704,7 +819,10 @@ function RecipientPreview({
           ))}
         </div>
 
-        <button className="mt-6 h-10 w-full rounded-xl bg-[#171717] text-[10px] font-semibold text-white">
+        <button
+          type="button"
+          className="mt-6 h-10 w-full rounded-xl bg-[#171717] text-[10px] font-semibold text-white"
+        >
           Mulai Lengkapi
         </button>
 
@@ -728,8 +846,8 @@ function EmptyRequirements() {
       </p>
 
       <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-black/35">
-        Tambahkan data, dokumen, atau persetujuan
-        yang ingin Anda minta.
+        Tambahkan data, dokumen, atau persetujuan yang ingin Anda
+        minta.
       </p>
     </div>
   );
@@ -748,6 +866,7 @@ function AddOption({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition hover:bg-[#f5f5f1]"
     >
@@ -826,6 +945,33 @@ function typeLabel(type: FieldType) {
   if (type === "text") return "Data / Teks";
   if (type === "file") return "Upload Dokumen";
   return "Persetujuan";
+}
+
+function createRequestCode() {
+  const timePart = Date.now()
+    .toString(36)
+    .slice(-6)
+    .toUpperCase();
+
+  const randomPart = Math.random()
+    .toString(36)
+    .slice(2, 5)
+    .toUpperCase();
+
+  return `LR-${timePart}${randomPart}`;
+}
+
+function createPublicToken() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID().replaceAll("-", "").slice(0, 16);
+  }
+
+  return `${Date.now().toString(36)}${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
 }
 
 /* ICONS */

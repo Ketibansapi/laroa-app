@@ -1,52 +1,173 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-const requestToken = "a8F2kP";
-const displayUrl = `laroa.app/r/${requestToken}`;
+type RequestData = {
+  id: string;
+  request_code: string;
+  title: string;
+  type: string;
+  status: string;
+  public_token: string | null;
+};
 
 export default function PublishPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const requestId = searchParams.get("request");
+
+  const [request, setRequest] = useState<RequestData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRequest() {
+      if (!requestId) {
+        setLoadError("Request tidak ditemukan.");
+        setLoading(false);
+        return;
+      }
+
+      const supabase = createClient();
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (userError || !user) {
+        router.replace("/login");
+        router.refresh();
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("requests")
+        .select(
+          "id, request_code, title, type, status, public_token",
+        )
+        .eq("id", requestId)
+        .single();
+
+      if (cancelled) return;
+
+      if (error || !data) {
+        console.error("Load request error:", error);
+        setLoadError("Request tidak dapat dimuat.");
+        setLoading(false);
+        return;
+      }
+
+      if (!data.public_token) {
+        setLoadError("Request belum memiliki public link.");
+        setLoading(false);
+        return;
+      }
+
+      setRequest(data as RequestData);
+      setLoading(false);
+    }
+
+    loadRequest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId, router]);
+
+  const requestToken = request?.public_token ?? "";
+  const displayUrl = requestToken
+    ? `laroa.app/r/${requestToken}`
+    : "laroa.app/r/...";
+
+  function getPublicUrl() {
+    if (typeof window === "undefined" || !requestToken) {
+      return displayUrl;
+    }
+
+    return `${window.location.origin}/r/${requestToken}`;
+  }
+
   async function copyLink() {
-    const url =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/r/${requestToken}`
-        : displayUrl;
+    if (!requestToken) return;
 
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(getPublicUrl());
+
       setCopied(true);
 
       window.setTimeout(() => {
         setCopied(false);
       }, 1800);
-    } catch {
+    } catch (error) {
+      console.error("Copy link error:", error);
       setCopied(false);
     }
   }
 
   function shareWhatsApp() {
-    const url = `${window.location.origin}/r/${requestToken}`;
+    if (!request) return;
 
-    const message = `Halo, silakan lengkapi Registrasi Vendor melalui link berikut:\n\n${url}`;
+    const message = `Halo, silakan lengkapi ${request.title} melalui link berikut:\n\n${getPublicUrl()}`;
 
     window.open(
       `https://wa.me/?text=${encodeURIComponent(message)}`,
       "_blank",
+      "noopener,noreferrer",
     );
   }
 
   function shareEmail() {
-    const url = `${window.location.origin}/r/${requestToken}`;
+    if (!request) return;
 
-    const subject = "Registrasi Vendor";
-    const body = `Halo,\n\nSilakan lengkapi Registrasi Vendor melalui link berikut:\n\n${url}\n\nTerima kasih.`;
+    const subject = request.title;
+
+    const body = `Halo,\n\nSilakan lengkapi ${request.title} melalui link berikut:\n\n${getPublicUrl()}\n\nTerima kasih.`;
 
     window.location.href = `mailto:?subject=${encodeURIComponent(
       subject,
     )}&body=${encodeURIComponent(body)}`;
+  }
+
+  if (loading) {
+    return <PublishLoading />;
+  }
+
+  if (loadError || !request) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#f7f7f4] px-5 text-[#171717]">
+        <div className="w-full max-w-[460px] rounded-[24px] border border-black/[0.06] bg-white p-8 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#f2f2ee] text-black/40">
+            <LinkIcon />
+          </div>
+
+          <h1 className="mt-5 text-xl font-semibold tracking-[-0.03em]">
+            Request tidak tersedia
+          </h1>
+
+          <p className="mt-2 text-sm leading-6 text-black/45">
+            {loadError ||
+              "Request yang Anda cari tidak dapat ditemukan."}
+          </p>
+
+          <Link
+            href="/"
+            className="mt-6 flex h-11 items-center justify-center rounded-xl bg-[#171717] px-5 text-sm font-semibold text-white"
+          >
+            Kembali ke Dashboard
+          </Link>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -105,26 +226,30 @@ export default function PublishPage() {
           </h1>
 
           <p className="mx-auto mt-4 max-w-lg text-[15px] leading-7 text-black/45">
-            Registrasi Vendor sudah dipublish. Bagikan satu link ini kepada
-            vendor yang perlu melengkapinya.
+            {request.title} sudah dipublish. Bagikan satu link ini
+            kepada penerima yang perlu melengkapinya.
           </p>
         </section>
 
         {/* SHARE CARD */}
         <section className="mx-auto mt-10 max-w-[720px] overflow-hidden rounded-[26px] border border-black/[0.07] bg-white shadow-[0_20px_70px_rgba(0,0,0,0.05)]">
           <div className="border-b border-black/[0.06] p-5 sm:p-7">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-black/30">
                   Link Request
                 </p>
 
-                <p className="mt-2 text-sm font-semibold">
-                  Registrasi Vendor
+                <p className="mt-2 truncate text-sm font-semibold">
+                  {request.title}
+                </p>
+
+                <p className="mt-1 text-[10px] text-black/30">
+                  {request.request_code}
                 </p>
               </div>
 
-              <span className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-semibold text-emerald-700">
+              <span className="flex shrink-0 items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-semibold text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 Aktif
               </span>
@@ -141,6 +266,7 @@ export default function PublishPage() {
               </div>
 
               <button
+                type="button"
                 onClick={copyLink}
                 className={`flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold transition ${
                   copied
@@ -163,8 +289,8 @@ export default function PublishPage() {
             </div>
 
             <p className="mt-3 text-[10px] leading-5 text-black/30">
-              Siapa pun yang memiliki link ini dapat membuka request tanpa
-              membuat akun.
+              Siapa pun yang memiliki link ini dapat membuka request
+              tanpa membuat akun.
             </p>
           </div>
 
@@ -214,7 +340,9 @@ export default function PublishPage() {
           <div className="rounded-[22px] border border-black/[0.06] bg-white p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-semibold">QR Code</p>
+                <p className="text-sm font-semibold">
+                  QR Code
+                </p>
 
                 <p className="mt-1 text-xs leading-5 text-black/40">
                   Scan untuk membuka request.
@@ -230,7 +358,7 @@ export default function PublishPage() {
               <FakeQrCode />
             </div>
 
-            <p className="mt-5 text-center text-[10px] font-medium text-black/30">
+            <p className="mt-5 break-all text-center text-[10px] font-medium text-black/30">
               {displayUrl}
             </p>
           </div>
@@ -259,28 +387,30 @@ export default function PublishPage() {
               </h2>
 
               <p className="mt-3 text-xs leading-5 text-white/45">
-                Buka request seperti vendor Anda membukanya dari WhatsApp,
-                email, atau QR Code.
+                Buka request seperti penerima Anda membukanya dari
+                WhatsApp, email, atau QR Code.
               </p>
             </div>
 
             <Link
-  href={`/r/${requestToken}`}
-  className="mt-10 flex h-11 items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90 md:mt-auto"
->
-  Lihat sebagai penerima
-  <ArrowIcon />
-</Link>
+              href={`/r/${requestToken}`}
+              className="mt-10 flex h-11 items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90 md:mt-auto"
+            >
+              Lihat sebagai penerima
+              <ArrowIcon />
+            </Link>
           </div>
         </section>
 
         {/* BOTTOM */}
         <section className="mx-auto mt-10 flex max-w-[720px] flex-col items-center justify-between gap-4 border-t border-black/[0.07] pt-7 sm:flex-row">
           <Link
-            href="/requests/new/builder?template=vendor"
+            href={`/requests/new/builder?template=${encodeURIComponent(
+              request.type,
+            )}`}
             className="text-sm font-semibold text-black/40 transition hover:text-black"
           >
-            ← Kembali ke builder
+            ← Buat request lain
           </Link>
 
           <Link
@@ -291,6 +421,40 @@ export default function PublishPage() {
             <ArrowIcon />
           </Link>
         </section>
+      </div>
+    </main>
+  );
+}
+
+function PublishLoading() {
+  return (
+    <main className="min-h-screen bg-[#f7f7f4] text-[#171717]">
+      <header className="border-b border-black/[0.06] bg-white">
+        <div className="mx-auto flex h-16 max-w-[1440px] items-center px-5 sm:px-7 lg:h-20 lg:px-10">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#171717] text-[11px] font-bold text-white">
+              L
+            </div>
+
+            <span className="text-lg font-semibold tracking-[-0.04em]">
+              Laroa
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[720px] px-5 py-20 sm:px-7">
+        <div className="animate-pulse">
+          <div className="mx-auto h-14 w-14 rounded-full bg-black/[0.08]" />
+
+          <div className="mx-auto mt-8 h-3 w-40 rounded-full bg-black/[0.06]" />
+
+          <div className="mx-auto mt-4 h-12 w-64 rounded-xl bg-black/[0.07]" />
+
+          <div className="mx-auto mt-5 h-4 w-[80%] rounded-full bg-black/[0.05]" />
+
+          <div className="mt-12 h-64 rounded-[26px] border border-black/[0.05] bg-white" />
+        </div>
       </div>
     </main>
   );
@@ -309,6 +473,7 @@ function ShareButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="group flex items-center gap-3 rounded-[16px] border border-black/[0.07] p-3.5 text-left transition hover:-translate-y-0.5 hover:border-black/15 hover:shadow-sm"
     >
@@ -317,7 +482,9 @@ function ShareButton({
       </div>
 
       <div>
-        <p className="text-xs font-semibold">{label}</p>
+        <p className="text-xs font-semibold">
+          {label}
+        </p>
 
         <p className="mt-0.5 text-[9px] text-black/35">
           {description}
@@ -398,7 +565,11 @@ function FakeQrCode() {
           row.split("").map((cell, columnIndex) => (
             <div
               key={`${rowIndex}-${columnIndex}`}
-              className={cell === "1" ? "bg-[#171717]" : "bg-white"}
+              className={
+                cell === "1"
+                  ? "bg-[#171717]"
+                  : "bg-white"
+              }
             />
           )),
         )}
@@ -411,7 +582,12 @@ function FakeQrCode() {
 
 function CheckIcon() {
   return (
-    <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="25"
+      height="25"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="m6 12 4 4 8-8"
         stroke="currentColor"
@@ -425,7 +601,12 @@ function CheckIcon() {
 
 function SmallCheckIcon() {
   return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="m6 12 4 4 8-8"
         stroke="currentColor"
@@ -465,7 +646,12 @@ function LinkIcon() {
 
 function CopyIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <rect
         x="8"
         y="8"
@@ -487,7 +673,12 @@ function CopyIcon() {
 
 function WhatsAppIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.5-4A8 8 0 1 1 20 11.5Z"
         stroke="currentColor"
@@ -507,7 +698,12 @@ function WhatsAppIcon() {
 
 function MailIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <rect
         x="3"
         y="5"
@@ -530,7 +726,12 @@ function MailIcon() {
 
 function QrIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <rect
         x="3"
         y="3"
@@ -572,7 +773,12 @@ function QrIcon() {
 
 function EyeIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
         stroke="currentColor"
@@ -592,7 +798,12 @@ function EyeIcon() {
 
 function ArrowIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M5 12h14M14 7l5 5-5 5"
         stroke="currentColor"

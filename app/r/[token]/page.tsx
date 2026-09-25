@@ -1,86 +1,209 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-type UploadKey = "nib" | "npwp" | "akta";
+type FieldType = "text" | "file" | "checkbox";
 
-type UploadState = {
-  file: File | null;
+type Requirement = {
+  id: string;
+  label: string;
+  field_type: FieldType;
+  required: boolean;
+  position: number;
 };
 
+type PublicRequest = {
+  id: string;
+  request_code: string;
+  title: string;
+  description: string | null;
+  type: string;
+  status: string;
+  requirements: Requirement[];
+};
+
+type RequirementValue = string | File | boolean | null;
+
 export default function RecipientRequestPage() {
-  const [companyName, setCompanyName] = useState("");
-  const [businessType, setBusinessType] = useState("");
-  const [companyAddress, setCompanyAddress] = useState("");
+  const params = useParams<{ token: string }>();
+  const token = params.token;
 
-  const [uploads, setUploads] = useState<Record<UploadKey, UploadState>>({
-    nib: { file: null },
-    npwp: { file: null },
-    akta: { file: null },
-  });
+  const [request, setRequest] = useState<PublicRequest | null>(
+    null,
+  );
 
-  const [agreement, setAgreement] = useState(false);
+  const [values, setValues] = useState<
+    Record<string, RequirementValue>
+  >({});
+
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRequest() {
+      if (!token) {
+        setLoadError("Link request tidak valid.");
+        setLoading(false);
+        return;
+      }
+
+      const supabase = createClient();
+
+      const { data, error } = await supabase.rpc(
+        "get_public_request",
+        {
+          p_token: token,
+        },
+      );
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Load public request error:", error);
+        setLoadError(
+          "Request tidak dapat dimuat. Silakan periksa kembali link yang Anda terima.",
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (!data) {
+        setLoadError(
+          "Request tidak ditemukan atau sudah tidak aktif.",
+        );
+        setLoading(false);
+        return;
+      }
+
+      const publicRequest = data as PublicRequest;
+
+      const initialValues: Record<
+        string,
+        RequirementValue
+      > = {};
+
+      publicRequest.requirements.forEach((requirement) => {
+        if (requirement.field_type === "checkbox") {
+          initialValues[requirement.id] = false;
+          return;
+        }
+
+        if (requirement.field_type === "file") {
+          initialValues[requirement.id] = null;
+          return;
+        }
+
+        initialValues[requirement.id] = "";
+      });
+
+      setRequest(publicRequest);
+      setValues(initialValues);
+      setLoading(false);
+    }
+
+    loadRequest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   const completedItems = useMemo(() => {
-    let completed = 0;
+    if (!request) return 0;
 
-    const companyDataComplete =
-      companyName.trim() !== "" &&
-      businessType.trim() !== "" &&
-      companyAddress.trim() !== "";
+    return request.requirements.filter((requirement) =>
+      isRequirementComplete(
+        requirement,
+        values[requirement.id],
+      ),
+    ).length;
+  }, [request, values]);
 
-    if (companyDataComplete) completed += 1;
-    if (uploads.nib.file) completed += 1;
-    if (uploads.npwp.file) completed += 1;
-    if (uploads.akta.file) completed += 1;
-    if (agreement) completed += 1;
+  const requiredRequirements = useMemo(() => {
+    if (!request) return [];
 
-    return completed;
-  }, [
-    companyName,
-    businessType,
-    companyAddress,
-    uploads,
-    agreement,
-  ]);
+    return request.requirements.filter(
+      (requirement) => requirement.required,
+    );
+  }, [request]);
 
-  const totalItems = 5;
-  const progress = Math.round((completedItems / totalItems) * 100);
-  const canSubmit = completedItems === totalItems;
+  const requiredCompleted = useMemo(() => {
+    return requiredRequirements.filter((requirement) =>
+      isRequirementComplete(
+        requirement,
+        values[requirement.id],
+      ),
+    ).length;
+  }, [requiredRequirements, values]);
 
-  function handleFile(key: UploadKey, file: File | null) {
-    if (!file) return;
+  const totalItems = request?.requirements.length ?? 0;
 
-    setUploads((current) => ({
+  const progress =
+    totalItems === 0
+      ? 100
+      : Math.round((completedItems / totalItems) * 100);
+
+  const canSubmit =
+    Boolean(request) &&
+    requiredCompleted === requiredRequirements.length;
+
+  const documentCount =
+    request?.requirements.filter(
+      (requirement) => requirement.field_type === "file",
+    ).length ?? 0;
+
+  function updateValue(
+    requirementId: string,
+    value: RequirementValue,
+  ) {
+    setValues((current) => ({
       ...current,
-      [key]: {
-        file,
-      },
-    }));
-  }
-
-  function removeFile(key: UploadKey) {
-    setUploads((current) => ({
-      ...current,
-      [key]: {
-        file: null,
-      },
+      [requirementId]: value,
     }));
   }
 
   function handleSubmit() {
-    if (!canSubmit) return;
+    if (!canSubmit || !request) return;
+
+    /*
+      Submission persistence belum kita sambungkan.
+      Tahap berikutnya:
+      - submissions table
+      - answers
+      - Supabase Storage
+      - file upload
+    */
 
     setSubmitted(true);
+
     window.scrollTo({
       top: 0,
       behavior: "smooth",
     });
   }
 
+  if (loading) {
+    return <RecipientLoading />;
+  }
+
+  if (loadError || !request) {
+    return (
+      <RequestUnavailable
+        message={
+          loadError ||
+          "Request yang Anda cari tidak tersedia."
+        }
+      />
+    );
+  }
+
   if (submitted) {
-    return <SuccessScreen companyName={companyName} />;
+    return <SuccessScreen request={request} />;
   }
 
   return (
@@ -114,32 +237,36 @@ export default function RecipientRequestPage() {
           {/* INTRO */}
           <section className="max-w-[700px]">
             <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-black/30">
-              Noctara meminta informasi
+              Anda menerima request
             </p>
 
             <h1 className="mt-4 text-[38px] font-semibold leading-[1.03] tracking-[-0.055em] sm:text-[48px]">
-              Registrasi Vendor
+              {request.title}
             </h1>
 
             <p className="mt-5 max-w-[620px] text-[14px] leading-7 text-black/45 sm:text-[15px]">
-              Lengkapi data dan dokumen perusahaan berikut untuk proses
-              registrasi vendor. Anda tidak perlu membuat akun.
+              {request.description ||
+                "Lengkapi informasi berikut untuk menyelesaikan request ini. Anda tidak perlu membuat akun."}
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] font-medium text-black/35">
               <span className="flex items-center gap-2">
-                <ClockIcon />
-                ± 5 menit
+                <ClockIcon />± {estimateMinutes(totalItems)} menit
               </span>
 
-              <span className="flex items-center gap-2">
-                <DocumentIcon />
-                3 dokumen
-              </span>
+              {documentCount > 0 && (
+                <span className="flex items-center gap-2">
+                  <DocumentIcon />
+                  {documentCount}{" "}
+                  {documentCount === 1
+                    ? "dokumen"
+                    : "dokumen"}
+                </span>
+              )}
 
               <span className="flex items-center gap-2">
                 <LockIcon />
-                Data hanya untuk Noctara
+                Data hanya untuk pembuat request
               </span>
             </div>
           </section>
@@ -155,140 +282,100 @@ export default function RecipientRequestPage() {
 
           {/* FORM */}
           <div className="mt-10 space-y-4">
-            {/* COMPANY DATA */}
-            <SectionCard
-              number="01"
-              title="Data perusahaan"
-              description="Informasi dasar mengenai perusahaan Anda."
-              complete={
-                companyName.trim() !== "" &&
-                businessType.trim() !== "" &&
-                companyAddress.trim() !== ""
-              }
-            >
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Nama perusahaan" required>
-                  <input
-                    value={companyName}
-                    onChange={(event) =>
-                      setCompanyName(event.target.value)
-                    }
-                    placeholder="PT Contoh Indonesia"
-                    className="h-12 w-full rounded-xl border border-black/[0.09] bg-[#fafaf8] px-4 text-sm outline-none transition placeholder:text-black/20 focus:border-black/30 focus:bg-white"
-                  />
-                </Field>
-
-                <Field label="Jenis usaha" required>
-                  <input
-                    value={businessType}
-                    onChange={(event) =>
-                      setBusinessType(event.target.value)
-                    }
-                    placeholder="Software & Technology"
-                    className="h-12 w-full rounded-xl border border-black/[0.09] bg-[#fafaf8] px-4 text-sm outline-none transition placeholder:text-black/20 focus:border-black/30 focus:bg-white"
-                  />
-                </Field>
-              </div>
-
-              <div className="mt-5">
-                <Field label="Alamat perusahaan" required>
-                  <textarea
-                    value={companyAddress}
-                    onChange={(event) =>
-                      setCompanyAddress(event.target.value)
-                    }
-                    placeholder="Masukkan alamat lengkap perusahaan"
-                    rows={3}
-                    className="w-full resize-none rounded-xl border border-black/[0.09] bg-[#fafaf8] px-4 py-3.5 text-sm leading-6 outline-none transition placeholder:text-black/20 focus:border-black/30 focus:bg-white"
-                  />
-                </Field>
-              </div>
-            </SectionCard>
-
-            {/* NIB */}
-            <SectionCard
-              number="02"
-              title="NIB"
-              description="Upload Nomor Induk Berusaha perusahaan."
-              complete={Boolean(uploads.nib.file)}
-            >
-              <UploadBox
-                file={uploads.nib.file}
-                onFile={(file) => handleFile("nib", file)}
-                onRemove={() => removeFile("nib")}
-              />
-            </SectionCard>
-
-            {/* NPWP */}
-            <SectionCard
-              number="03"
-              title="NPWP"
-              description="Upload dokumen NPWP perusahaan."
-              complete={Boolean(uploads.npwp.file)}
-            >
-              <UploadBox
-                file={uploads.npwp.file}
-                onFile={(file) => handleFile("npwp", file)}
-                onRemove={() => removeFile("npwp")}
-              />
-            </SectionCard>
-
-            {/* AKTA */}
-            <SectionCard
-              number="04"
-              title="Akta Perusahaan"
-              description="Upload akta pendirian atau perubahan terakhir."
-              complete={Boolean(uploads.akta.file)}
-            >
-              <UploadBox
-                file={uploads.akta.file}
-                onFile={(file) => handleFile("akta", file)}
-                onRemove={() => removeFile("akta")}
-              />
-            </SectionCard>
-
-            {/* AGREEMENT */}
-            <SectionCard
-              number="05"
-              title="Persetujuan"
-              description="Konfirmasi bahwa informasi yang diberikan sudah benar."
-              complete={agreement}
-            >
-              <button
-                type="button"
-                onClick={() => setAgreement((value) => !value)}
-                className={`flex w-full items-start gap-4 rounded-[16px] border p-4 text-left transition ${
-                  agreement
-                    ? "border-[#171717] bg-[#171717] text-white"
-                    : "border-black/[0.08] bg-[#fafaf8] hover:border-black/20"
-                }`}
-              >
-                <div
-                  className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
-                    agreement
-                      ? "border-white bg-white text-black"
-                      : "border-black/20 bg-white"
-                  }`}
-                >
-                  {agreement && <SmallCheckIcon />}
+            {request.requirements.length === 0 && (
+              <div className="rounded-[22px] border border-black/[0.07] bg-white px-6 py-12 text-center">
+                <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#f2f2ee] text-black/35">
+                  <DocumentIcon />
                 </div>
 
-                <div>
-                  <p className="text-xs font-semibold">
-                    Saya menyatakan data yang diberikan sudah benar.
-                  </p>
+                <p className="mt-4 text-sm font-semibold">
+                  Tidak ada informasi yang perlu dilengkapi
+                </p>
 
-                  <p
-                    className={`mt-1.5 text-[10px] leading-5 ${
-                      agreement ? "text-white/45" : "text-black/35"
-                    }`}
+                <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-black/35">
+                  Request ini tidak memiliki kebutuhan tambahan.
+                  Anda dapat langsung mengirimkannya.
+                </p>
+              </div>
+            )}
+
+            {request.requirements.map(
+              (requirement, index) => {
+                const value = values[requirement.id];
+
+                return (
+                  <SectionCard
+                    key={requirement.id}
+                    number={String(index + 1).padStart(
+                      2,
+                      "0",
+                    )}
+                    title={requirement.label}
+                    description={requirementDescription(
+                      requirement,
+                    )}
+                    complete={isRequirementComplete(
+                      requirement,
+                      value,
+                    )}
+                    required={requirement.required}
                   >
-                    Dengan melanjutkan, Anda menyetujui data dan dokumen ini
-                    digunakan untuk proses registrasi vendor.
-                  </p>
-                </div>
-              </button>
-            </SectionCard>
+                    {requirement.field_type === "text" && (
+                      <TextRequirement
+                        requirement={requirement}
+                        value={
+                          typeof value === "string"
+                            ? value
+                            : ""
+                        }
+                        onChange={(newValue) =>
+                          updateValue(
+                            requirement.id,
+                            newValue,
+                          )
+                        }
+                      />
+                    )}
+
+                    {requirement.field_type === "file" && (
+                      <UploadBox
+                        file={
+                          value instanceof File
+                            ? value
+                            : null
+                        }
+                        onFile={(file) =>
+                          updateValue(
+                            requirement.id,
+                            file,
+                          )
+                        }
+                        onRemove={() =>
+                          updateValue(
+                            requirement.id,
+                            null,
+                          )
+                        }
+                      />
+                    )}
+
+                    {requirement.field_type ===
+                      "checkbox" && (
+                      <AgreementRequirement
+                        requirement={requirement}
+                        checked={value === true}
+                        onChange={(checked) =>
+                          updateValue(
+                            requirement.id,
+                            checked,
+                          )
+                        }
+                      />
+                    )}
+                  </SectionCard>
+                );
+              },
+            )}
           </div>
 
           {/* SUBMIT */}
@@ -297,12 +384,16 @@ export default function RecipientRequestPage() {
               <div>
                 <p className="text-sm font-semibold">
                   {canSubmit
-                    ? "Semua sudah lengkap."
-                    : `${totalItems - completedItems} bagian belum lengkap.`}
+                    ? "Semua yang wajib sudah lengkap."
+                    : `${
+                        requiredRequirements.length -
+                        requiredCompleted
+                      } bagian wajib belum lengkap.`}
                 </p>
 
                 <p className="mt-1 text-[10px] leading-5 text-black/35">
-                  Periksa kembali sebelum mengirim.
+                  Periksa kembali informasi Anda sebelum
+                  mengirim.
                 </p>
               </div>
 
@@ -346,14 +437,26 @@ export default function RecipientRequestPage() {
               </h3>
 
               <p className="mt-2 text-[10px] leading-5 text-black/35">
-                Informasi yang Anda kirim hanya dapat dilihat oleh pihak yang
-                membuat request ini.
+                Informasi yang Anda kirim hanya digunakan
+                untuk menyelesaikan request ini.
               </p>
 
               <div className="mt-5 border-t border-black/[0.06] pt-4">
                 <p className="text-[9px] leading-4 text-black/25">
+                  Request ID
+                  <br />
+                  <span className="font-semibold text-black/45">
+                    {request.request_code}
+                  </span>
+                </p>
+              </div>
+
+              <div className="mt-4 border-t border-black/[0.06] pt-4">
+                <p className="text-[9px] leading-4 text-black/25">
                   Powered by{" "}
-                  <span className="font-semibold text-black/45">Laroa</span>
+                  <span className="font-semibold text-black/45">
+                    Laroa
+                  </span>
                   <br />
                   A product by Noctara
                 </p>
@@ -366,17 +469,96 @@ export default function RecipientRequestPage() {
   );
 }
 
+function TextRequirement({
+  requirement,
+  value,
+  onChange,
+}: {
+  requirement: Requirement;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field
+      label={requirement.label}
+      required={requirement.required}
+    >
+      <textarea
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+        placeholder={`Isi ${requirement.label.toLowerCase()}`}
+        rows={3}
+        className="w-full resize-none rounded-xl border border-black/[0.09] bg-[#fafaf8] px-4 py-3.5 text-sm leading-6 outline-none transition placeholder:text-black/20 focus:border-black/30 focus:bg-white"
+      />
+    </Field>
+  );
+}
+
+function AgreementRequirement({
+  requirement,
+  checked,
+  onChange,
+}: {
+  requirement: Requirement;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`flex w-full items-start gap-4 rounded-[16px] border p-4 text-left transition ${
+        checked
+          ? "border-[#171717] bg-[#171717] text-white"
+          : "border-black/[0.08] bg-[#fafaf8] hover:border-black/20"
+      }`}
+    >
+      <div
+        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition ${
+          checked
+            ? "border-white bg-white text-black"
+            : "border-black/20 bg-white"
+        }`}
+      >
+        {checked && <SmallCheckIcon />}
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold">
+          {requirement.label}
+        </p>
+
+        <p
+          className={`mt-1.5 text-[10px] leading-5 ${
+            checked
+              ? "text-white/45"
+              : "text-black/35"
+          }`}
+        >
+          Centang untuk memberikan persetujuan.
+          {!requirement.required &&
+            " Persetujuan ini bersifat opsional."}
+        </p>
+      </div>
+    </button>
+  );
+}
+
 function SectionCard({
   number,
   title,
   description,
   complete,
+  required,
   children,
 }: {
   number: string;
   title: string;
   description: string;
   complete: boolean;
+  required: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -394,7 +576,17 @@ function SectionCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-sm font-semibold">{title}</h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="truncate text-sm font-semibold">
+                {title}
+              </h2>
+
+              {!required && (
+                <span className="shrink-0 rounded-full bg-[#f2f2ee] px-2 py-0.5 text-[8px] font-semibold text-black/30">
+                  Opsional
+                </span>
+              )}
+            </div>
 
             {complete && (
               <span className="shrink-0 text-[9px] font-semibold text-emerald-600">
@@ -427,7 +619,10 @@ function Field({
     <label className="block">
       <span className="mb-2 block text-[10px] font-semibold text-black/50">
         {label}
-        {required && <span className="ml-1 text-red-400">*</span>}
+
+        {required && (
+          <span className="ml-1 text-red-400">*</span>
+        )}
       </span>
 
       {children}
@@ -454,7 +649,9 @@ function UploadBox({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold">{file.name}</p>
+          <p className="truncate text-xs font-semibold">
+            {file.name}
+          </p>
 
           <p className="mt-1 text-[9px] text-black/35">
             {formatFileSize(file.size)} · Siap dikirim
@@ -481,7 +678,8 @@ function UploadBox({
         className="hidden"
         accept=".pdf,.jpg,.jpeg,.png"
         onChange={(event) => {
-          const selectedFile = event.target.files?.[0];
+          const selectedFile =
+            event.target.files?.[0];
 
           if (selectedFile) {
             onFile(selectedFile);
@@ -555,10 +753,83 @@ function ProgressCard({
   );
 }
 
-function SuccessScreen({
-  companyName,
+function RecipientLoading() {
+  return (
+    <main className="min-h-screen bg-[#f7f7f4] text-[#171717]">
+      <header className="border-b border-black/[0.06] bg-white">
+        <div className="mx-auto flex h-16 max-w-[1180px] items-center px-5 sm:px-7 lg:h-[72px]">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#171717] text-[11px] font-bold text-white">
+              L
+            </div>
+
+            <span className="text-lg font-semibold tracking-[-0.04em]">
+              Laroa
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[1180px] px-5 py-12 sm:px-7">
+        <div className="max-w-[700px] animate-pulse">
+          <div className="h-3 w-40 rounded-full bg-black/[0.06]" />
+
+          <div className="mt-5 h-12 w-[70%] rounded-xl bg-black/[0.07]" />
+
+          <div className="mt-5 h-4 w-[85%] rounded-full bg-black/[0.05]" />
+
+          <div className="mt-3 h-4 w-[65%] rounded-full bg-black/[0.05]" />
+        </div>
+
+        <div className="mt-12 max-w-[800px] space-y-4">
+          <div className="h-48 animate-pulse rounded-[22px] border border-black/[0.05] bg-white" />
+
+          <div className="h-48 animate-pulse rounded-[22px] border border-black/[0.05] bg-white" />
+
+          <div className="h-48 animate-pulse rounded-[22px] border border-black/[0.05] bg-white" />
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function RequestUnavailable({
+  message,
 }: {
-  companyName: string;
+  message: string;
+}) {
+  return (
+    <main className="grid min-h-screen place-items-center bg-[#f7f7f4] px-5 py-12 text-[#171717]">
+      <div className="w-full max-w-[500px] rounded-[26px] border border-black/[0.07] bg-white px-7 py-10 text-center shadow-[0_20px_70px_rgba(0,0,0,0.04)]">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#f2f2ee] text-black/40">
+          <LockIcon />
+        </div>
+
+        <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/30">
+          Laroa
+        </p>
+
+        <h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
+          Request tidak tersedia
+        </h1>
+
+        <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-black/40">
+          {message}
+        </p>
+
+        <p className="mt-8 text-[9px] text-black/25">
+          Pastikan Anda menggunakan link yang diberikan oleh
+          pembuat request.
+        </p>
+      </div>
+    </main>
+  );
+}
+
+function SuccessScreen({
+  request,
+}: {
+  request: PublicRequest;
 }) {
   return (
     <main className="grid min-h-screen place-items-center bg-[#f7f7f4] px-5 py-12 text-[#171717]">
@@ -569,7 +840,7 @@ function SuccessScreen({
           </div>
 
           <p className="mt-7 text-[10px] font-semibold uppercase tracking-[0.17em] text-black/30">
-            Berhasil dikirim
+            Siap dikirim
           </p>
 
           <h1 className="mt-3 text-[36px] font-semibold leading-[1.05] tracking-[-0.05em] sm:text-[44px]">
@@ -577,16 +848,11 @@ function SuccessScreen({
           </h1>
 
           <p className="mx-auto mt-4 max-w-[400px] text-[13px] leading-6 text-black/45">
-            Data dan dokumen{" "}
-            {companyName ? (
-              <>
-                untuk{" "}
-                <span className="font-semibold text-black/65">
-                  {companyName}
-                </span>{" "}
-              </>
-            ) : null}
-            sudah berhasil dikirim ke Noctara.
+            Semua informasi untuk{" "}
+            <span className="font-semibold text-black/65">
+              {request.title}
+            </span>{" "}
+            sudah lengkap.
           </p>
 
           <div className="mt-8 rounded-[17px] bg-[#f6f6f2] p-4 text-left">
@@ -597,18 +863,19 @@ function SuccessScreen({
 
               <div>
                 <p className="text-xs font-semibold">
-                  Registrasi Vendor
+                  {request.title}
                 </p>
 
                 <p className="mt-1 text-[9px] text-black/35">
-                  Semua informasi telah diterima
+                  {request.request_code}
                 </p>
               </div>
             </div>
           </div>
 
           <p className="mt-8 text-[9px] leading-5 text-black/25">
-            Anda dapat menutup halaman ini.
+            Penyimpanan submission akan diaktifkan pada tahap
+            berikutnya.
           </p>
         </div>
 
@@ -630,21 +897,80 @@ function SuccessScreen({
   );
 }
 
+function isRequirementComplete(
+  requirement: Requirement,
+  value: RequirementValue,
+) {
+  if (requirement.field_type === "text") {
+    return (
+      typeof value === "string" &&
+      value.trim().length > 0
+    );
+  }
+
+  if (requirement.field_type === "file") {
+    return value instanceof File;
+  }
+
+  if (requirement.field_type === "checkbox") {
+    return value === true;
+  }
+
+  return false;
+}
+
+function requirementDescription(
+  requirement: Requirement,
+) {
+  if (requirement.field_type === "text") {
+    return requirement.required
+      ? "Informasi ini wajib dilengkapi."
+      : "Informasi ini bersifat opsional.";
+  }
+
+  if (requirement.field_type === "file") {
+    return requirement.required
+      ? "Upload dokumen yang diminta."
+      : "Upload dokumen jika tersedia.";
+  }
+
+  return requirement.required
+    ? "Persetujuan ini diperlukan untuk menyelesaikan request."
+    : "Persetujuan ini bersifat opsional.";
+}
+
+function estimateMinutes(total: number) {
+  if (total <= 2) return 2;
+  if (total <= 5) return 5;
+  if (total <= 8) return 8;
+  return 10;
+}
+
 function formatFileSize(bytes: number) {
   if (bytes === 0) return "0 KB";
 
   if (bytes < 1024 * 1024) {
-    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${Math.max(
+      1,
+      Math.round(bytes / 1024),
+    )} KB`;
   }
 
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024)).toFixed(
+    1,
+  )} MB`;
 }
 
 /* ICONS */
 
 function SmallCheckIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="m6 12 4 4 8-8"
         stroke="currentColor"
@@ -658,7 +984,12 @@ function SmallCheckIcon() {
 
 function LargeCheckIcon() {
   return (
-    <svg width="25" height="25" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="25"
+      height="25"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="m6 12 4 4 8-8"
         stroke="currentColor"
@@ -672,7 +1003,12 @@ function LargeCheckIcon() {
 
 function ClockIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <circle
         cx="12"
         cy="12"
@@ -693,7 +1029,12 @@ function ClockIcon() {
 
 function DocumentIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
         stroke="currentColor"
@@ -711,7 +1052,12 @@ function DocumentIcon() {
 
 function LockIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <rect
         x="5"
         y="10"
@@ -733,7 +1079,12 @@ function LockIcon() {
 
 function ShieldIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M12 3 19 6v5c0 4.5-2.8 7.7-7 10-4.2-2.3-7-5.5-7-10V6l7-3Z"
         stroke="currentColor"
@@ -754,7 +1105,12 @@ function ShieldIcon() {
 
 function UploadIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M12 16V5M8 9l4-4 4 4"
         stroke="currentColor"
@@ -775,7 +1131,12 @@ function UploadIcon() {
 
 function FileIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"
         stroke="currentColor"
@@ -793,7 +1154,12 @@ function FileIcon() {
 
 function TrashIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M4 7h16M9 7V4h6v3M8 10v7M12 10v7M16 10v7M6 7l1 14h10l1-14"
         stroke="currentColor"
@@ -807,7 +1173,12 @@ function TrashIcon() {
 
 function ArrowIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
       <path
         d="M5 12h14M14 7l5 5-5 5"
         stroke="currentColor"
