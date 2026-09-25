@@ -111,6 +111,7 @@ export default function SubmissionsPage() {
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-black/[0.06] bg-[#f7f7f4]/95 px-5 backdrop-blur lg:hidden">
         <Link href="/" className="flex items-center gap-2.5">
           <Logo />
+
           <span className="text-lg font-semibold tracking-[-0.04em]">
             Laroa
           </span>
@@ -120,23 +121,36 @@ export default function SubmissionsPage() {
           type="button"
           onClick={() => setMobileMenuOpen((value) => !value)}
           className="grid h-9 w-9 place-items-center rounded-xl border border-black/[0.08] bg-white"
-          aria-label="Buka menu"
+          aria-label={mobileMenuOpen ? "Tutup menu" : "Buka menu"}
         >
-          <MenuIcon />
+          {mobileMenuOpen ? <CloseIcon /> : <MenuIcon />}
         </button>
       </header>
 
+      {/* MOBILE MENU */}
       {mobileMenuOpen && (
         <div className="fixed inset-x-0 top-16 z-30 border-b border-black/[0.06] bg-white p-4 shadow-lg lg:hidden">
-          <MobileNavItem href="/" label="Overview" />
-          <MobileNavItem href="/requests" label="Requests" />
+          <MobileNavItem
+            href="/"
+            label="Overview"
+            onNavigate={() => setMobileMenuOpen(false)}
+          />
+
+          <MobileNavItem
+            href="/requests"
+            label="Requests"
+            onNavigate={() => setMobileMenuOpen(false)}
+          />
+
           <MobileNavItem
             href="/submissions"
             label="Submissions"
             active
+            onNavigate={() => setMobileMenuOpen(false)}
           />
-          <MobileNavItem href="/templates" label="Templates" />
-          <MobileNavItem href="/settings" label="Settings" />
+
+          <MobileNavItem label="Templates" comingSoon />
+          <MobileNavItem label="Settings" comingSoon />
         </div>
       )}
 
@@ -145,6 +159,7 @@ export default function SubmissionsPage() {
         <div className="flex h-20 items-center px-7">
           <Link href="/" className="flex items-center gap-2.5">
             <Logo />
+
             <span className="text-lg font-semibold tracking-[-0.04em]">
               Laroa
             </span>
@@ -156,12 +171,18 @@ export default function SubmissionsPage() {
             Workspace
           </p>
 
-          <NavItem href="/" icon={<HomeIcon />} label="Overview" />
+          <NavItem
+            href="/"
+            icon={<HomeIcon />}
+            label="Overview"
+          />
+
           <NavItem
             href="/requests"
             icon={<RequestsIcon />}
             label="Requests"
           />
+
           <NavItem
             href="/submissions"
             icon={<InboxIcon />}
@@ -169,10 +190,11 @@ export default function SubmissionsPage() {
             active
             badge={waitingCount}
           />
+
           <NavItem
-            href="/templates"
             icon={<TemplateIcon />}
             label="Templates"
+            comingSoon
           />
 
           <div className="my-5 border-t border-black/[0.06]" />
@@ -182,9 +204,9 @@ export default function SubmissionsPage() {
           </p>
 
           <NavItem
-            href="/settings"
             icon={<SettingsIcon />}
             label="Settings"
+            comingSoon
           />
         </nav>
 
@@ -195,7 +217,10 @@ export default function SubmissionsPage() {
             </div>
 
             <div className="min-w-0">
-              <p className="truncate text-xs font-semibold">Deary</p>
+              <p className="truncate text-xs font-semibold">
+                Deary
+              </p>
+
               <p className="mt-0.5 truncate text-[9px] text-black/35">
                 Noctara
               </p>
@@ -212,13 +237,18 @@ export default function SubmissionsPage() {
             <p className="text-[10px] font-semibold text-black/30">
               Workspace
             </p>
-            <p className="mt-1 text-sm font-semibold">Submissions</p>
+
+            <p className="mt-1 text-sm font-semibold">
+              Submissions
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="grid h-10 w-10 place-items-center rounded-xl border border-black/[0.07] bg-white text-black/40 transition hover:text-black"
+              className="grid h-10 w-10 place-items-center rounded-xl border border-black/[0.07] bg-white text-black/30"
+              aria-label="Notifikasi belum tersedia"
+              title="Segera"
             >
               <BellIcon />
             </button>
@@ -252,6 +282,7 @@ export default function SubmissionsPage() {
 
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-amber-400" />
+
               <span className="text-[10px] font-semibold text-black/40">
                 {waitingCount} menunggu review
               </span>
@@ -408,7 +439,7 @@ export default function SubmissionsPage() {
                 <Link
                   href={`/submissions/${submission.id}`}
                   key={submission.id}
-                  className="block p-5 transition hover:bg-[#fafaf8]"
+                  className="block p-5 transition active:bg-[#fafaf8]"
                 >
                   <div className="flex items-start gap-3">
                     <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#f0f0ec] text-[9px] font-bold text-black/50">
@@ -427,7 +458,9 @@ export default function SubmissionsPage() {
                           </p>
                         </div>
 
-                        <ArrowIcon />
+                        <span className="shrink-0 text-black/30">
+                          <ArrowIcon />
+                        </span>
                       </div>
 
                       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -448,6 +481,7 @@ export default function SubmissionsPage() {
               ))}
             </div>
 
+            {/* EMPTY */}
             {filteredSubmissions.length === 0 && (
               <div className="px-5 py-16 text-center">
                 <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-[#f3f3ef] text-black/30">
@@ -498,39 +532,71 @@ function NavItem({
   label,
   active = false,
   badge,
+  comingSoon = false,
 }: {
-  href: string;
+  href?: string;
   icon: React.ReactNode;
   label: string;
   active?: boolean;
   badge?: number;
+  comingSoon?: boolean;
 }) {
-  return (
-    <Link
-      href={href}
-      className={`mb-1 flex h-10 items-center gap-3 rounded-xl px-4 text-[11px] font-semibold transition ${
-        active
-          ? "bg-[#171717] text-white"
-          : "text-black/40 hover:bg-[#f5f5f1] hover:text-black"
-      }`}
-    >
-      <span className={active ? "text-white" : "text-black/35"}>
+  const className = `mb-1 flex h-10 items-center gap-3 rounded-xl px-4 text-[11px] font-semibold transition ${
+    active
+      ? "bg-[#171717] text-white"
+      : comingSoon
+        ? "cursor-default text-black/25"
+        : "text-black/40 hover:bg-[#f5f5f1] hover:text-black"
+  }`;
+
+  const content = (
+    <>
+      <span
+        className={
+          active
+            ? "text-white"
+            : comingSoon
+              ? "text-black/20"
+              : "text-black/35"
+        }
+      >
         {icon}
       </span>
 
       <span className="flex-1">{label}</span>
 
-      {badge !== undefined && badge > 0 && (
-        <span
-          className={`grid min-w-5 place-items-center rounded-full px-1.5 py-0.5 text-[8px] font-bold ${
-            active
-              ? "bg-white text-black"
-              : "bg-[#171717] text-white"
-          }`}
-        >
-          {badge}
+      {comingSoon ? (
+        <span className="rounded-full bg-black/[0.04] px-2 py-1 text-[7px] font-bold uppercase tracking-[0.08em] text-black/25">
+          Segera
         </span>
+      ) : (
+        badge !== undefined &&
+        badge > 0 && (
+          <span
+            className={`grid min-w-5 place-items-center rounded-full px-1.5 py-0.5 text-[8px] font-bold ${
+              active
+                ? "bg-white text-black"
+                : "bg-[#171717] text-white"
+            }`}
+          >
+            {badge}
+          </span>
+        )
       )}
+    </>
+  );
+
+  if (comingSoon || !href) {
+    return (
+      <div className={className} aria-disabled="true">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={href} className={className}>
+      {content}
     </Link>
   );
 }
@@ -539,21 +605,50 @@ function MobileNavItem({
   href,
   label,
   active = false,
+  comingSoon = false,
+  onNavigate,
 }: {
-  href: string;
+  href?: string;
   label: string;
   active?: boolean;
+  comingSoon?: boolean;
+  onNavigate?: () => void;
 }) {
+  const className = `mb-1 flex items-center rounded-xl px-4 py-3 text-xs font-semibold ${
+    active
+      ? "bg-[#171717] text-white"
+      : comingSoon
+        ? "text-black/25"
+        : "text-black/50 hover:bg-[#f5f5f1]"
+  }`;
+
+  const content = (
+    <>
+      <span>{label}</span>
+
+      {comingSoon && (
+        <span className="ml-auto rounded-full bg-black/[0.04] px-2 py-1 text-[7px] font-bold uppercase tracking-[0.08em] text-black/25">
+          Segera
+        </span>
+      )}
+    </>
+  );
+
+  if (comingSoon || !href) {
+    return (
+      <div className={className} aria-disabled="true">
+        {content}
+      </div>
+    );
+  }
+
   return (
     <Link
       href={href}
-      className={`mb-1 block rounded-xl px-4 py-3 text-xs font-semibold ${
-        active
-          ? "bg-[#171717] text-white"
-          : "text-black/50 hover:bg-[#f5f5f1]"
-      }`}
+      onClick={onNavigate}
+      className={className}
     >
-      {label}
+      {content}
     </Link>
   );
 }
@@ -587,7 +682,9 @@ function StatCard({
         </div>
       </div>
 
-      <p className="mt-3 text-[9px] text-black/30">{description}</p>
+      <p className="mt-3 text-[9px] text-black/30">
+        {description}
+      </p>
     </div>
   );
 }
@@ -860,6 +957,19 @@ function MenuIcon() {
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
       <path
         d="M5 8h14M5 12h14M5 16h14"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M6 6l12 12M18 6 6 18"
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"

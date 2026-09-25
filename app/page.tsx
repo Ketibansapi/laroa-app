@@ -61,9 +61,12 @@ export default function Home() {
     <main className="min-h-screen bg-[#f7f7f4] text-[#171717]">
       {/* MOBILE HEADER */}
       <header className="flex h-16 items-center justify-between border-b border-black/[0.06] bg-white px-5 lg:hidden">
-        <Logo />
+        <Link href="/" aria-label="Laroa home">
+          <Logo />
+        </Link>
 
         <button
+          type="button"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="grid h-10 w-10 place-items-center rounded-xl border border-black/[0.08]"
           aria-label="Buka menu"
@@ -76,10 +79,28 @@ export default function Home() {
       {mobileMenuOpen && (
         <div className="border-b border-black/[0.06] bg-white px-5 py-4 lg:hidden">
           <nav className="space-y-1">
-            <MobileNavItem label="Overview" active />
-            <MobileNavItem label="Requests" />
-            <MobileNavItem label="Submissions" />
-            <MobileNavItem label="Templates" />
+            <MobileNavItem
+              label="Overview"
+              href="/"
+              active
+              onNavigate={() => setMobileMenuOpen(false)}
+            />
+
+            <MobileNavItem
+              label="Requests"
+              href="/requests"
+              onNavigate={() => setMobileMenuOpen(false)}
+            />
+
+            <MobileNavItem
+              label="Submissions"
+              href="/submissions"
+              onNavigate={() => setMobileMenuOpen(false)}
+            />
+
+            <MobileNavItem label="Templates" comingSoon />
+
+            <MobileNavItem label="Settings" comingSoon />
           </nav>
         </div>
       )}
@@ -87,7 +108,9 @@ export default function Home() {
       {/* DESKTOP SIDEBAR */}
       <aside className="fixed bottom-0 left-0 top-0 hidden w-[250px] flex-col border-r border-black/[0.06] bg-white lg:flex">
         <div className="flex h-20 items-center px-7">
-          <Logo />
+          <Link href="/" aria-label="Laroa home">
+            <Logo />
+          </Link>
         </div>
 
         <div className="px-4 pt-5">
@@ -96,16 +119,40 @@ export default function Home() {
           </p>
 
           <nav className="space-y-1">
-            <NavItem icon={<HomeIcon />} label="Overview" active />
-            <NavItem icon={<RequestIcon />} label="Requests" />
-            <NavItem icon={<SubmissionIcon />} label="Submissions" />
-            <NavItem icon={<TemplateIcon />} label="Templates" />
+            <NavItem
+              icon={<HomeIcon />}
+              label="Overview"
+              href="/"
+              active
+            />
+
+            <NavItem
+              icon={<RequestIcon />}
+              label="Requests"
+              href="/requests"
+            />
+
+            <NavItem
+              icon={<SubmissionIcon />}
+              label="Submissions"
+              href="/submissions"
+            />
+
+            <NavItem
+              icon={<TemplateIcon />}
+              label="Templates"
+              comingSoon
+            />
           </nav>
         </div>
 
         <div className="mt-auto px-4 pb-5">
           <div className="mb-4 border-t border-black/[0.06] pt-4">
-            <NavItem icon={<SettingsIcon />} label="Settings" />
+            <NavItem
+              icon={<SettingsIcon />}
+              label="Settings"
+              comingSoon
+            />
           </div>
 
           <div className="flex items-center gap-3 rounded-2xl px-3 py-3">
@@ -114,11 +161,21 @@ export default function Home() {
             </div>
 
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">Deary</p>
-              <p className="truncate text-xs text-black/40">Noctara</p>
+              <p className="truncate text-sm font-semibold">
+                Deary
+              </p>
+
+              <p className="truncate text-xs text-black/40">
+                Noctara
+              </p>
             </div>
 
-            <button className="ml-auto text-black/30 transition hover:text-black">
+            <button
+              type="button"
+              className="ml-auto text-black/20"
+              aria-label="Account menu belum tersedia"
+              title="Segera"
+            >
               <DotsIcon />
             </button>
           </div>
@@ -129,19 +186,27 @@ export default function Home() {
       <div className="lg:pl-[250px]">
         {/* TOP BAR */}
         <header className="hidden h-20 items-center justify-between border-b border-black/[0.06] bg-white/80 px-8 backdrop-blur-xl lg:flex xl:px-12">
-          <div>
-            <p className="text-sm font-medium text-black/40">Overview</p>
-          </div>
+          <p className="text-sm font-medium text-black/40">
+            Overview
+          </p>
 
           <div className="flex items-center gap-3">
-            <button className="grid h-10 w-10 place-items-center rounded-xl border border-black/[0.07] bg-white transition hover:bg-black/[0.02]">
+            <button
+              type="button"
+              className="grid h-10 w-10 place-items-center rounded-xl border border-black/[0.07] bg-white text-black/40"
+              aria-label="Notifikasi"
+              title="Segera"
+            >
               <BellIcon />
             </button>
 
-            <button className="flex h-10 items-center gap-2 rounded-xl bg-[#171717] px-4 text-sm font-semibold text-white transition hover:bg-black/80">
+            <Link
+              href="/requests/new"
+              className="flex h-10 items-center gap-2 rounded-xl bg-[#171717] px-4 text-sm font-semibold text-white transition hover:bg-black/80"
+            >
               <PlusIcon />
               Buat Request
-            </button>
+            </Link>
           </div>
         </header>
 
@@ -163,10 +228,13 @@ export default function Home() {
               </p>
             </div>
 
-            <button className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#171717] px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg md:hidden">
+            <Link
+              href="/requests/new"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#171717] px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg md:hidden"
+            >
               <PlusIcon />
               Buat Request
-            </button>
+            </Link>
           </section>
 
           {/* STATS */}
@@ -209,14 +277,18 @@ export default function Home() {
                   <h2 className="text-base font-semibold tracking-[-0.02em]">
                     Request terbaru
                   </h2>
+
                   <p className="mt-1 text-xs text-black/40">
                     Aktivitas terbaru dari workspace Anda.
                   </p>
                 </div>
 
-                <button className="text-sm font-semibold text-black/55 transition hover:text-black">
+                <Link
+                  href="/requests"
+                  className="text-sm font-semibold text-black/55 transition hover:text-black"
+                >
                   Lihat semua
-                </button>
+                </Link>
               </div>
 
               {/* DESKTOP TABLE */}
@@ -237,7 +309,10 @@ export default function Home() {
               {/* MOBILE LIST */}
               <div className="divide-y divide-black/[0.05] md:hidden">
                 {requests.map((request) => (
-                  <MobileRequestCard key={request.id} request={request} />
+                  <MobileRequestCard
+                    key={request.id}
+                    request={request}
+                  />
                 ))}
               </div>
             </div>
@@ -267,16 +342,21 @@ export default function Home() {
                   bagikan satu link.
                 </p>
 
-                <button className="mt-7 flex h-11 w-full items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90">
+                <Link
+                  href="/requests/new"
+                  className="mt-7 flex h-11 w-full items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90"
+                >
                   Buat Request
                   <ArrowIcon />
-                </button>
+                </Link>
               </div>
 
               {/* ACTIVITY */}
               <div className="rounded-[22px] border border-black/[0.06] bg-white p-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Aktivitas terbaru</h3>
+                  <h3 className="text-sm font-semibold">
+                    Aktivitas terbaru
+                  </h3>
 
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 </div>
@@ -305,7 +385,7 @@ export default function Home() {
             </div>
           </section>
 
-          {/* EMPTY / CTA STRIP */}
+          {/* CTA STRIP */}
           <section className="mt-5 flex flex-col gap-5 rounded-[22px] border border-black/[0.06] bg-[#efefe9] p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/30">
@@ -322,10 +402,13 @@ export default function Home() {
               </p>
             </div>
 
-            <button className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-black/[0.1] bg-white px-5 text-sm font-semibold transition hover:border-black/20">
+            <Link
+              href="/requests/new"
+              className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-black/[0.1] bg-white px-5 text-sm font-semibold transition hover:border-black/20"
+            >
               Lihat Template
               <ArrowIcon />
-            </button>
+            </Link>
           </section>
         </div>
       </div>
@@ -340,7 +423,9 @@ function Logo() {
         L
       </div>
 
-      <span className="text-lg font-semibold tracking-[-0.04em]">Laroa</span>
+      <span className="text-lg font-semibold tracking-[-0.04em]">
+        Laroa
+      </span>
     </div>
   );
 }
@@ -348,41 +433,112 @@ function Logo() {
 function NavItem({
   icon,
   label,
+  href,
   active = false,
+  comingSoon = false,
 }: {
   icon: React.ReactNode;
   label: string;
+  href?: string;
   active?: boolean;
+  comingSoon?: boolean;
 }) {
+  const className = `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+    active
+      ? "bg-[#f2f2ee] text-black"
+      : comingSoon
+        ? "cursor-default text-black/25"
+        : "text-black/45 hover:bg-black/[0.025] hover:text-black"
+  }`;
+
+  const content = (
+    <>
+      <span
+        className={
+          active
+            ? "text-black"
+            : comingSoon
+              ? "text-black/20"
+              : "text-black/35"
+        }
+      >
+        {icon}
+      </span>
+
+      <span>{label}</span>
+
+      {comingSoon && (
+        <span className="ml-auto rounded-full bg-black/[0.04] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-black/25">
+          Segera
+        </span>
+      )}
+    </>
+  );
+
+  if (comingSoon || !href) {
+    return (
+      <div className={className} aria-disabled="true">
+        {content}
+      </div>
+    );
+  }
+
   return (
-    <button
-      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-        active
-          ? "bg-[#f2f2ee] text-black"
-          : "text-black/45 hover:bg-black/[0.025] hover:text-black"
-      }`}
-    >
-      <span className={active ? "text-black" : "text-black/35"}>{icon}</span>
-      {label}
-    </button>
+    <Link href={href} className={className}>
+      {content}
+    </Link>
   );
 }
 
 function MobileNavItem({
   label,
+  href,
   active = false,
+  comingSoon = false,
+  onNavigate,
 }: {
   label: string;
+  href?: string;
   active?: boolean;
+  comingSoon?: boolean;
+  onNavigate?: () => void;
 }) {
+  const className = `flex w-full items-center rounded-xl px-4 py-3 text-left text-sm font-medium ${
+    active
+      ? "bg-[#f2f2ee]"
+      : comingSoon
+        ? "text-black/25"
+        : "text-black/50"
+  }`;
+
+  const content = (
+    <>
+      <span>{label}</span>
+
+      {comingSoon && (
+        <span className="ml-auto rounded-full bg-black/[0.04] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.08em] text-black/25">
+          Segera
+        </span>
+      )}
+    </>
+  );
+
+  if (comingSoon || !href) {
+    return (
+      <div className={className} aria-disabled="true">
+        {content}
+      </div>
+    );
+  }
+
   return (
-    <button
-      className={`w-full rounded-xl px-4 py-3 text-left text-sm font-medium ${
-        active ? "bg-[#f2f2ee]" : "text-black/50"
-      }`}
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className={className}
     >
-      {label}
-    </button>
+      {content}
+    </Link>
   );
 }
 
@@ -400,14 +556,18 @@ function StatCard({
   return (
     <div className="rounded-[20px] border border-black/[0.06] bg-white p-5 sm:p-6">
       <div className="flex items-start justify-between">
-        <p className="text-sm font-medium text-black/45">{label}</p>
+        <p className="text-sm font-medium text-black/45">
+          {label}
+        </p>
 
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#f5f5f1] text-black/45">
           {icon}
         </div>
       </div>
 
-      <p className="mt-6 text-[34px] font-semibold tracking-[-0.05em]">{value}</p>
+      <p className="mt-6 text-[34px] font-semibold tracking-[-0.05em]">
+        {value}
+      </p>
 
       <p className="mt-1 text-xs text-black/35">{detail}</p>
     </div>
@@ -418,12 +578,19 @@ function RequestRow({ request }: { request: RequestItem }) {
   const progress =
     request.submissions === 0
       ? 0
-      : Math.round((request.completed / request.submissions) * 100);
+      : Math.round(
+          (request.completed / request.submissions) * 100,
+        );
 
   return (
-    <div className="grid grid-cols-[minmax(220px,1.6fr)_0.7fr_1fr_0.7fr_40px] items-center border-b border-black/[0.05] px-6 py-4 last:border-b-0 transition hover:bg-black/[0.012]">
+    <Link
+      href={`/requests/${request.id}`}
+      className="grid grid-cols-[minmax(220px,1.6fr)_0.7fr_1fr_0.7fr_40px] items-center border-b border-black/[0.05] px-6 py-4 last:border-b-0 transition hover:bg-black/[0.012]"
+    >
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">{request.name}</p>
+        <p className="truncate text-sm font-semibold">
+          {request.name}
+        </p>
 
         <p className="mt-1 text-xs text-black/35">
           {request.id} · {request.type}
@@ -449,34 +616,50 @@ function RequestRow({ request }: { request: RequestItem }) {
         </div>
       </div>
 
-      <p className="text-xs text-black/40">{request.updated}</p>
+      <p className="text-xs text-black/40">
+        {request.updated}
+      </p>
 
-      <button className="grid h-8 w-8 place-items-center rounded-lg text-black/30 transition hover:bg-black/[0.04] hover:text-black">
-        <DotsIcon />
-      </button>
-    </div>
+      <div className="grid h-8 w-8 place-items-center rounded-lg text-black/30">
+        <ArrowIcon />
+      </div>
+    </Link>
   );
 }
 
-function MobileRequestCard({ request }: { request: RequestItem }) {
+function MobileRequestCard({
+  request,
+}: {
+  request: RequestItem;
+}) {
   const progress =
     request.submissions === 0
       ? 0
-      : Math.round((request.completed / request.submissions) * 100);
+      : Math.round(
+          (request.completed / request.submissions) * 100,
+        );
 
   return (
-    <div className="p-5">
+    <Link
+      href={`/requests/${request.id}`}
+      className="block p-5 transition active:bg-black/[0.02]"
+    >
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold">{request.name}</p>
-          <p className="mt-1 text-xs text-black/35">{request.id}</p>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            {request.name}
+          </p>
+
+          <p className="mt-1 text-xs text-black/35">
+            {request.id} · {request.type}
+          </p>
         </div>
 
         <Status status={request.status} />
       </div>
 
       <div className="mt-5">
-        <div className="mb-2 flex justify-between text-xs">
+        <div className="mb-2 flex justify-between gap-4 text-xs">
           <span className="font-medium">
             {request.completed}/{request.submissions} selesai
           </span>
@@ -491,7 +674,12 @@ function MobileRequestCard({ request }: { request: RequestItem }) {
           />
         </div>
       </div>
-    </div>
+
+      <div className="mt-4 flex items-center justify-end gap-1 text-[10px] font-semibold text-black/35">
+        Buka request
+        <ArrowIcon />
+      </div>
+    </Link>
   );
 }
 
@@ -540,7 +728,9 @@ function ActivityItem({
           <span className="text-black/45">{detail}</span>
         </p>
 
-        <p className="mt-0.5 text-[10px] text-black/30">{time} lalu</p>
+        <p className="mt-0.5 text-[10px] text-black/30">
+          {time} lalu
+        </p>
       </div>
     </div>
   );

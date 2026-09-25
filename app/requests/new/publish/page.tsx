@@ -265,12 +265,12 @@ export default function PublishPage() {
             </div>
 
             <Link
-              href={`/r/${requestToken}`}
-              className="mt-auto flex h-11 items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90"
-            >
-              Lihat sebagai penerima
-              <ArrowIcon />
-            </Link>
+  href={`/r/${requestToken}`}
+  className="mt-10 flex h-11 items-center justify-between rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90 md:mt-auto"
+>
+  Lihat sebagai penerima
+  <ArrowIcon />
+</Link>
           </div>
         </section>
 
